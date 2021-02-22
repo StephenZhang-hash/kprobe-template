@@ -19,7 +19,7 @@ struct print_event_class {
 	unsigned short id;
 	enum print_line_t (*format)(struct trace_seq *seq,
 				    struct print_event_entry *entry);
-	struct ring_buffer *buffer;
+	struct trace_buffer *buffer;
 };
 
 #define RB_BUFFER_SIZE	SZ_32K

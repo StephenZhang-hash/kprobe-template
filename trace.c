@@ -18,7 +18,7 @@
 
 struct print_event_iterator {
 	struct mutex			mutex;
-	struct ring_buffer		*buffer;
+	struct trace_buffer		*buffer;
 
 	/* The below is zeroed out in pipe_read */
 	struct trace_seq		seq;
@@ -33,8 +33,8 @@ struct print_event_iterator {
 extern struct print_event_class * const __start_print_event_class[];
 extern struct print_event_class * const __stop_print_event_class[];
 
-static struct ring_buffer *ring_buffer;
-static int (*ring_buffer_waiting)(struct ring_buffer *buffer, int cpu,
+static struct trace_buffer *ring_buffer;
+static int (*ring_buffer_waiting)(struct trace_buffer *buffer, int cpu,
 				  bool full);
 
 static int kallsyms_lookup_symbols(void)
@@ -116,7 +116,7 @@ static struct print_event_entry *
 __find_next_entry(struct print_event_iterator *iter, int *ent_cpu,
 		  unsigned long *missing_events, u64 *ent_ts)
 {
-	struct ring_buffer *buffer = iter->buffer;
+	struct trace_buffer *buffer = iter->buffer;
 	struct print_event_entry *ent, *next = NULL;
 	unsigned long lost_events = 0, next_lost = 0;
 	u64 next_ts = 0, ts;
@@ -287,12 +287,11 @@ static int trace_release_pipe(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations trace_pipe_fops = {
-	.owner		= THIS_MODULE,
-	.open		= trace_open_pipe,
-	.read		= trace_read_pipe,
-	.release	= trace_release_pipe,
-	.llseek		= no_llseek,
+static const struct proc_ops trace_pipe_fops = {
+	.proc_open		= trace_open_pipe,
+	.proc_read		= trace_read_pipe,
+	.proc_release	= trace_release_pipe,
+	.proc_lseek		= no_llseek,
 };
 
 static inline int num_print_event_class(void)
