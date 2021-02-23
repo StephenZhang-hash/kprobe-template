@@ -34,9 +34,9 @@ extern struct print_event_class * const __start_print_event_class[];
 extern struct print_event_class * const __stop_print_event_class[];
 
 static struct trace_buffer *ring_buffer;
-static int (*ring_buffer_waiting)(struct trace_buffer *buffer, int cpu,
-				  bool full);
 
+
+bool trace_pipe_enable = false;
 
 static int trace_open_pipe(struct inode *inode, struct file *filp)
 {
@@ -67,30 +67,6 @@ static int is_trace_empty(struct print_event_iterator *iter)
 	return 1;
 }
 
-/* Must be called with iter->mutex held. */
-static int trace_wait_pipe(struct file *filp)
-{
-	struct print_event_iterator *iter = filp->private_data;
-	int ret;
-
-	while (is_trace_empty(iter)) {
-
-		if ((filp->f_flags & O_NONBLOCK))
-			return -EAGAIN;
-
-		mutex_unlock(&iter->mutex);
-
-		ret = ring_buffer_waiting(iter->buffer, RING_BUFFER_ALL_CPUS,
-					  false);
-
-		mutex_lock(&iter->mutex);
-
-		if (ret)
-			return ret;
-	}
-
-	return 1;
-}
 
 static struct print_event_entry *
 peek_next_entry(struct print_event_iterator *iter, int cpu, u64 *ts,
@@ -184,6 +160,7 @@ static enum print_line_t print_trace_fmt_line(struct print_event_iterator *iter)
 	return trace_handle_return(seq);
 }
 
+
 static ssize_t trace_read_pipe(struct file *filp, char __user *ubuf,
 			       size_t cnt, loff_t *ppos)
 {
@@ -200,16 +177,6 @@ static ssize_t trace_read_pipe(struct file *filp, char __user *ubuf,
 
 	sret = trace_seq_to_user(&iter->seq, ubuf, cnt);
 	if (sret != -EBUSY)
-		goto out;
-
-	trace_seq_init(&iter->seq);
-
-waitagain:
-	if (fatal_signal_pending(current))
-		goto out;
-
-	sret = trace_wait_pipe(filp);
-	if (sret <= 0)
 		goto out;
 
 	/* stop when tracing is finished */
@@ -258,13 +225,6 @@ waitagain:
 	if (iter->seq.seq.readpos >= trace_seq_used(&iter->seq))
 		trace_seq_init(&iter->seq);
 
-	/*
-	 * If there was nothing to send to user, in spite of consuming trace
-	 * entries, go back to wait for more entries.
-	 */
-	if (sret == -EBUSY)
-		goto waitagain;
-
 out:
 	mutex_unlock(&iter->mutex);
 
@@ -283,10 +243,73 @@ static int trace_release_pipe(struct inode *inode, struct file *file)
 
 static const struct proc_ops trace_pipe_fops = {
 	.proc_open		= trace_open_pipe,
+	.proc_read		= trace_read_pipe,
 	.proc_release	= trace_release_pipe,
 	.proc_lseek		= no_llseek,
 };
 
+
+
+static int trace_pipe_enable_open(struct inode *inode, struct file *filp)
+{
+	nonseekable_open(inode, filp);
+	return 0;
+}
+DEFINE_MUTEX(pipe_mutex);
+static ssize_t trace_pipe_enable_read(struct file *filp, char __user *ubuf,
+			       size_t cnt, loff_t *ppos)
+{
+	char buf[4] = "0";
+	
+	mutex_lock(&pipe_mutex);
+	if (trace_pipe_enable == true)
+		strcpy(buf, "1");
+	if (trace_pipe_enable == false)
+		strcpy(buf, "0");
+	mutex_unlock(&pipe_mutex);
+	
+	strcat(buf, "\n");
+	return simple_read_from_buffer(ubuf, cnt, ppos, buf, strlen(buf));
+}
+
+static ssize_t trace_pipe_enable_write(struct file *filp, const char __user *ubuf, size_t cnt, loff_t *ppos)
+{
+	unsigned long val;
+	int ret;
+	ret = kstrtoul_from_user(ubuf, cnt, 10, &val);
+	if (ret)
+		return ret;
+	//ret = tracing_update_buffers();
+	//if (ret < 0)
+	//	return ret;
+	switch (val) {
+	case 0:
+		mutex_lock(&pipe_mutex);
+		trace_pipe_enable = false;
+		ret = 0;
+		mutex_unlock(&pipe_mutex);
+		break;
+	case 1:
+		mutex_lock(&pipe_mutex);
+		trace_pipe_enable = true;
+		ret = 0;
+		mutex_unlock(&pipe_mutex);
+		break;
+	default:
+		return -EINVAL;
+	}
+	*ppos += cnt;
+	return ret ? ret : cnt;
+	
+}	
+
+
+static const struct proc_ops trace_pipe_enable_fops = {
+	.proc_open		= trace_pipe_enable_open,
+	.proc_read		= trace_pipe_enable_read,
+	.proc_write		= trace_pipe_enable_write,
+	.proc_lseek		= no_llseek,
+};
 
 static inline int num_print_event_class(void)
 {
@@ -318,6 +341,10 @@ static int __init print_event_init(void)
 			      &trace_pipe_fops, ring_buffer))
 		goto remove_proc;
 
+	if (!proc_create_data("enable", S_IRUSR, parent_dir,
+			      &trace_pipe_enable_fops, NULL))
+		goto remove_proc;
+	
 	for (class_ptr = __start_print_event_class;
 	     class_ptr < __stop_print_event_class; class_ptr++) {
 		struct print_event_class *class = *class_ptr;

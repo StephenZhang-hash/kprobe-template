@@ -7,7 +7,7 @@
 #define pr_fmt(fmt) CONFIG_MODULE_NAME ": " fmt
 
 #include "kprobe.h"
-
+extern bool trace_pipe_enable;
 #define CREATE_PRINT_EVENT
 #include "kprobe_print.h"
 

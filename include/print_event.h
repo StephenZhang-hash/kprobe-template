@@ -123,6 +123,7 @@
 	} while (0)
 
 #undef PRINT_EVENT_DEFINE
+
 #define PRINT_EVENT_DEFINE(name, proto, args, tstruct, assign, print)	\
 	struct print_event_entry_##name {				\
 		struct print_event_entry	head;			\
@@ -179,6 +180,8 @@
 									\
 	static notrace void name##_print(proto)				\
 	{								\
+		if(!trace_pipe_enable)		\
+			return;					\
 		__do_##name##_print(__print_event_class_##name,		\
 				    args);				\
 	}
