@@ -1,3 +1,5 @@
+CONFIG_MODULE_SIG=n
+
 MODULE_NAME		:= kprobes
 MODULE_LICENSE		:= GPL
 MODULE_VERSION		:= 1.0
@@ -29,9 +31,9 @@ clean:
 	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
 
 install:
-	sudo insmod $(MODULE_NAME).ko
+	 insmod $(MODULE_NAME).ko
 
 remove:
-	sudo rmmod $(MODULE_NAME)
+	 rmmod $(MODULE_NAME)
 
 endif

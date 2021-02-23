@@ -39,7 +39,7 @@ KPROBE_HANDLER_DEFINE4(do_sys_open,
 }
 
 /* kprobe __close_fd */
-KPROBE_HANDLER_DEFINE2(__close_fd,
+KPROBE_HANDLER_DEFINE2(close_fd,
 		       struct files_struct *, files, unsigned, fd)
 {
 	return 0;

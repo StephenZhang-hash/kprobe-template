@@ -37,12 +37,6 @@ static struct trace_buffer *ring_buffer;
 static int (*ring_buffer_waiting)(struct trace_buffer *buffer, int cpu,
 				  bool full);
 
-static int kallsyms_lookup_symbols(void)
-{
-	ring_buffer_waiting = (void *)kallsyms_lookup_name("ring_buffer_wait");
-
-	return ring_buffer_waiting ? 0 : -ENODEV;
-}
 
 static int trace_open_pipe(struct inode *inode, struct file *filp)
 {
@@ -289,10 +283,10 @@ static int trace_release_pipe(struct inode *inode, struct file *file)
 
 static const struct proc_ops trace_pipe_fops = {
 	.proc_open		= trace_open_pipe,
-	.proc_read		= trace_read_pipe,
 	.proc_release	= trace_release_pipe,
 	.proc_lseek		= no_llseek,
 };
+
 
 static inline int num_print_event_class(void)
 {
@@ -311,9 +305,6 @@ static int __init print_event_init(void)
 
 	if (num_class >= PRINT_EVENT_ID_MAX)
 		return -EINVAL;
-
-	if (kallsyms_lookup_symbols())
-		return -ENODEV;
 
 	ring_buffer = ring_buffer_alloc(RB_BUFFER_SIZE, RB_FL_OVERWRITE);
 	if (!ring_buffer)
